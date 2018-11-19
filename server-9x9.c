@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
@@ -9,7 +10,8 @@
 #define N_PLAYERS 2
 
 void usage(const char* executable) {
-  error(1, 0, "Usage: %s path/to/player1 path/to/player2", executable);
+  fprintf(stderr, "Usage: %s path/to/player1 path/to/player2 [-v]\n", executable);
+  exit(1);
 }
 
 void exec(const char* executable, int fd_in, int fd_out) {
@@ -22,16 +24,19 @@ void exec(const char* executable, int fd_in, int fd_out) {
   _exit(1);
 }
 
-void server(FILE* in[], FILE* out[]);
+void server(FILE* in[], FILE* out[], int verbose);
 
 int main(int argc, char* argv[]) {
+  int verbose;
   int server_to_player[N_PLAYERS][2];
   int player_to_server[N_PLAYERS][2];
   FILE* in[N_PLAYERS];
   FILE* out[N_PLAYERS];
   int pid[N_PLAYERS];
   int idx, jdx;
-  if (argc != 3) usage(argv[0]);
+  if (argc < 3 || argc > 4 || (argc == 4 && strcmp(argv[3], "-v") != 0))
+    usage(argv[0]);
+  verbose = argc == 4;
    
   for (idx = 0; idx < N_PLAYERS; ++idx) {
     if (pipe(server_to_player[idx]) == -1) {
@@ -45,7 +50,7 @@ int main(int argc, char* argv[]) {
   }
 
   for (idx = 0; idx < N_PLAYERS; ++idx) {
-    printf("Forking and executing %s...\n", argv[1+idx]);
+    if (verbose) printf("Forking and executing %s...\n", argv[1+idx]);
     pid[idx] = fork();
     if (pid[idx] == -1) {
       /* parent process: fail */
@@ -75,7 +80,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  server(in, out);
+  server(in, out, verbose);
 
   /* Terminate children */
   for (idx = 0; idx < 2; ++idx) {
@@ -174,6 +179,19 @@ int get_available_cells(struct cell empty[], const struct game* game) {
   return count_empty;
 }
 
+int break_tie(const char* status_3x3) {
+  int idx, count_x, count_o, winner;
+  count_x = count_o = 0;
+  for (idx = 0; idx < 9; ++idx) {
+    if (status_3x3[idx] == 'x') count_x += 1;
+    else if (status_3x3[idx] == 'o') count_o += 1;
+  }
+  if (count_x > count_o) winner = 0;
+  else if (count_o > count_x) winner = 1;
+  else winner = TIE;
+  return winner;
+}
+
 void play_next_move(struct game* game, FILE* in) {
   struct cell input, target_3x3, next_3x3;
   char subboard[3][3];
@@ -231,6 +249,9 @@ void play_next_move(struct game* game, FILE* in) {
       /* sub-board has a winner or either was completely filled, check
        * global game */
       game->winner = check_winner((const char*)game->status_3x3);
+      if (game->winner == TIE) {
+        game->winner = break_tie((const char*)game->status_3x3);
+      }
     }
     if (game->winner == ONGOING) {
       next_3x3.row = input.row % 3;
@@ -303,14 +324,14 @@ void show_game(struct game* game) {
   printf("Current player: %d\n", game->current_player);
 }
 
-void server(FILE* in[], FILE* out[]) {
+void server(FILE* in[], FILE* out[], int verbose) {
   struct game game;
   init_game(&game);
-  show_game(&game);
+  if (verbose) show_game(&game);
   while (game.winner==ONGOING) {
     send_game_info(&game, out[game.current_player]);
     play_next_move(&game, in[game.current_player]);
-    show_game(&game);
+    if (verbose) show_game(&game);
   }
   if (game.winner == TIE) {
     printf("Game ends in a TIE!\n");
