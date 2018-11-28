@@ -284,44 +284,41 @@ void send_game_info(const struct game* game, FILE* out) {
   fflush(out);
 }
 
-void print_large_board(char board[][9]) {
-  int idx;
+void print_large_board(char board[][9], char status_3x3[][3]) {
+  int idx, idx_subboard;
+  printf("   0   1   2     3   4   5     6   7   8\n");
   for (idx = 0; idx < 9; ++idx) {
     if (idx % 3 == 0) {
-      printf("             |             |             \n");
+      printf("              |             |             \n");
     }
-    printf("  %c | %c | %c  |  %c | %c | %c  |  %c | %c | %c  \n",
+    printf("%d  %c | %c | %c  |  %c | %c | %c  |  %c | %c | %c  \n", idx,
         board[idx][0], board[idx][1], board[idx][2],
         board[idx][3], board[idx][4], board[idx][5],
         board[idx][6], board[idx][7], board[idx][8]);
     if (idx % 3 < 2) {
-      printf(" ---|---|--- | ---|---|--- | ---|---|--- \n");
+      printf("  ---|---|--- | ---|---|--- | ---|---|--- \n");
     } else {
-      printf("             |             |             \n");
+      for (idx_subboard = 0; idx_subboard < 3; ++idx_subboard) {
+        printf(idx_subboard==0? " " : "|");
+        if (status_3x3[idx/3][idx_subboard] == ' ') printf("             ");
+        else if (status_3x3[idx/3][idx_subboard] == 'x') printf("  won by: x  ");
+        else if (status_3x3[idx/3][idx_subboard] == 'o') printf("  won by: o  ");
+        else printf("     tie     ");
+      }
+      printf("\n");
       if (idx != 8) {
-        printf("-------------|-------------|-------------\n");
+        printf(" -------------|-------------|-------------\n");
       }
     }
   }
 }
 
-void print_small_board(char board[][3]) {
-  printf(" %c | %c | %c\n", board[0][0],board[0][1], board[0][2]);
-  printf("---|---|---\n");
-  printf(" %c | %c | %c\n", board[1][0], board[1][1], board[1][2]);
-  printf("---|---|---\n");
-  printf(" %c | %c | %c\n", board[2][0], board[2][1], board[2][2]);
-}
-
 void show_game(struct game* game) {
   printf("---------------- Turn %2d ----------------\n", game->turn);
-  printf("Board:\n");
-  print_large_board(game->board);
-  printf("3x3 blocks' status:\n");
-  print_small_board(game->status_3x3);
-  printf("Last filled: %d %d\n", game->last_filled.row, game->last_filled.col);
+  print_large_board(game->board, game->status_3x3);
+  printf("\nLast filled: %d %d\n", game->last_filled.row, game->last_filled.col);
   printf("Active 3x3 block: %d %d\n", game->active_3x3.row, game->active_3x3.col);
-  printf("Current player: %d\n", game->current_player);
+  printf("Current player: %d\n\n", game->current_player);
 }
 
 void server(FILE* in[], FILE* out[], int verbose) {
